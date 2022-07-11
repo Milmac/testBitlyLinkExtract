@@ -17,7 +17,9 @@ Module Program
         Dim htmlToParse As String = IO.File.ReadAllText("C:\Users\mille\source\repos\testBitlyLinkExtract\testBitlyLinkExtract\parseTestPage.html")
 
         'Console.WriteLine(ParseBitly(htmlToParse))
-        ParseUtm(htmlToParse)
+        'Console.WriteLine(ParseUtm(htmlToParse))
+        Console.WriteLine(ParseUtm(ParseBitly(htmlToParse)))
+        'ParseUtm(htmlToParse)
 
     End Sub
 
@@ -55,12 +57,19 @@ Module Program
         'bitly conversion result to return
         Dim result As String = _html
 
+        Console.WriteLine("Old Links")
         'for each href link in the html document
         For Each link As HtmlAgilityPack.HtmlNode In document.DocumentNode.SelectNodes("//a[@href]")
-            'Console.WriteLine(GetBitlyDestination(link.Attributes("href").Value))
+            Console.WriteLine(link.Attributes("href").Value)
+        Next
+
+        Console.WriteLine("New Links")
+        'for each href link in the html document
+        For Each link As HtmlAgilityPack.HtmlNode In document.DocumentNode.SelectNodes("//a[@href]")
+            'Console.WriteLine(link.Attributes("href").Value)
 
             'replace bitly links with destination
-            RemoveUtm(link.Attributes("href").Value)
+            result = result.Replace(link.Attributes("href").Value, RemoveUtm(link.Attributes("href").Value))
             'get the inside of href with link.Attributes("href").Value
         Next
 
@@ -86,18 +95,40 @@ Module Program
 
     Private Function RemoveUtm(ByVal _utmUrl As String) As String
 
+        'add baseurl to internal links to fix Uri error
+        Dim baseUrl As String = "https://www.inyopools.com"
+
+        'clean utmlUrl by removing unnecessary "amp;" as this messes with the ParseQueryString Method
+        Dim clean_utmUrl = _utmUrl.Replace("amp;", "")
+
+
+
         'create a new uri using the input url
-        Dim uri As Uri = New Uri(_utmUrl)
+        Dim uri As Uri
+        Dim isAbsoluteResult As Boolean = IsAbsoluteUrl(clean_utmUrl)
+
+        If isAbsoluteResult Then
+            Console.WriteLine("Absolute Url Detected!!")
+            uri = New Uri(clean_utmUrl)
+        Else
+            Console.WriteLine("Relative Url Detected!")
+            'add inyopools.com to fix parse query string method since it only works for absolute urls
+            uri = New Uri(baseUrl + clean_utmUrl)
+        End If
+
+
+
         'parse the queries in the uri
         Dim newQueryString As Specialized.NameValueCollection = System.Web.HttpUtility.ParseQueryString(uri.Query)
 
+        'utm querys to be removed
         newQueryString.Remove("utm_source")
         newQueryString.Remove("utm_medium")
         newQueryString.Remove("utm_content")
         newQueryString.Remove("utm_campaign")
 
-        'store the left side of the _utmUrl without any queries
-        Dim pagePathWithoutQueryString As String = uri.GetLeftPart(UriPartial.Path)
+        'store the left side of the _utmUrl without any queries. Also remove inyopools base url as we want it to be a relative url
+        Dim pagePathWithoutQueryString As String = Replace(uri.GetLeftPart(UriPartial.Path), "https://www.inyopools.com", "")
 
         'if there are more than 0 queries that still exist
         If newQueryString.Count > 0 Then
@@ -109,5 +140,12 @@ Module Program
             Return pagePathWithoutQueryString
         End If
 
+    End Function
+
+    'returns true if the url is an absolute url and false if it's a relative url
+    Private Function IsAbsoluteUrl(ByVal url As String) As Boolean
+        Dim result As Uri
+
+        Return Uri.TryCreate(url, UriKind.Absolute, result)
     End Function
 End Module
